@@ -18,6 +18,7 @@ module.exports = function (stream, done) {
     if (!stream.readable) return resolve([])
 
     var arr = []
+    var cleanupTimeout;
 
     stream.on('data', onData)
     stream.on('end', onEnd)
@@ -35,11 +36,19 @@ module.exports = function (stream, done) {
     }
 
     function onClose() {
-      resolve(arr)
-      cleanup()
+      // Defer cleanup on close because of Mongo driver bug
+      // https://jira.mongodb.org/browse/NODE-1969
+      cleanupTimeout = setTimeout(function () {
+        resolve(arr)
+        cleanup()
+      }, 100);
     }
 
     function cleanup() {
+      if (cleanupTimeout) {
+        clearTimeout(cleanupTimeout)
+      }
+
       arr = null
       stream.removeListener('data', onData)
       stream.removeListener('end', onEnd)
